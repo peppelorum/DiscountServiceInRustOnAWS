@@ -18,6 +18,7 @@ async fn main() -> Result<(), Error> {
 #[derive(Deserialize)]
 struct Event {
     store_id: String,
+    user_id: String,
 }
 
 #[derive(Serialize)]
@@ -31,27 +32,50 @@ async fn handler(event: Event, context: Context) -> Result<Value, Error> {
     let config = aws_config::from_env().region(region_provider).load().await;
     let client = Client::new(&config);
 
-    let mut i = 0;
-    let number_of_codes = u32::from(event.number_of_codes);
-    let short_name = String::from(event.short_name);
+    let result = client
+        .query()
+        .table_name("discountcodes")
+        .index_name("claimed_by-index")
+        .index_name("store_id-index")
+        .key_condition_expression(
+            "store_id = :store_id"
+        )
+        .filter_expression(
+            "attribute_not_exists(claimed_by)"
+        )
+        .expression_attribute_values(
+            ":store_id",
+            AttributeValue::S(String::from(&event.store_id)),
+        )
+        .limit(1)
+        .send()
+        .await?;
 
-    while i < number_of_codes {
-        let code = format!("{}-{}", short_name, i);
-        let uuid = Uuid::new_v4().to_string();
-        let request = client.put_item()
+    if let Some(item) = &result.items {
+
+        let first = item.first();
+        let id = &first.unwrap().get("id").unwrap().as_s().unwrap().clone();
+
+        dbg!(first);
+        dbg!(id);
+
+        let update = client
+            .update_item()
             .table_name("discountcodes")
-            .item("id", AttributeValue::S(String::from(uuid)))
-            .item("store_id", AttributeValue::S(String::from(&event.store_id)))
-            .item("code", AttributeValue::S(String::from(code)));
+            .key(
+                "id",
+                AttributeValue::S(String::from(id))
+            )
+            .update_expression("set claimed_by = :user_id")
+            .expression_attribute_values(
+                ":user_id",
+                AttributeValue::S(String::from(&event.user_id))
+            );
 
-        request.send().await?;
-        i = i + 1;
+        update.send().await?;
     }
 
-    // let message = format!("Welcome, {}!", event.username);
-    // Ok(Output {
-    //     message: message,
-    // })
+    // Ok(json!({resp.items.item}));
 
     Ok(json!({ "message": "Record written!" }))
 }
