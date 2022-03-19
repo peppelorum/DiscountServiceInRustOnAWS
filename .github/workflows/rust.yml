@@ -13,7 +13,7 @@ jobs:
   build:
 
     runs-on: ubuntu-latest
-    
+
     defaults:
       run:
         working-directory: ./DiscountCodeCreate
@@ -22,18 +22,18 @@ jobs:
     - uses: actions/checkout@v2
     - name: Add target
       run: rustup target add x86_64-unknown-linux-musl
-    - name: Symlink
-      run: ln -s /usr/local/opt/musl-cross/bin/x86_64-linux-musl-gcc /usr/local/bin/musl-gcc
+    - name: Musl
+      run: sudo apt install musl-tools
     - name: Build
       run: cargo build --release --target x86_64-unknown-linux-musl
     - name: Create .zip file
       run: |
         cp target/x86_64-unknown-linux-musl/release/discount_code_create bootstrap
         zip lambda.zip bootstrap
-    - name: Configure AWS Credentials  
+    - name: Configure AWS Credentials
       uses: aws-actions/configure-aws-credentials@v1
       with:
-        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }} 
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
         aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
         aws-region: eu-north-1
     - name: deploy
